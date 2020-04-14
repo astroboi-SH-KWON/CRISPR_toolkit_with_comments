@@ -305,7 +305,15 @@ def Main():
     if options.multicore > 15:
         logging.warning('Optimal treads <= 15')
     logging.info(str(options))
-
+    """
+    InstInitFolder.strProjectFile is...
+    ./User/Nahye/2019_Nahye_Cas9D7_samples.txt in INPUT3
+    
+    190819_Nahye_12K_D4_D0_1-Cas9D7 Cas9D7  Ctrl 
+    190819_Nahye_12K_D4_eCas9_Rep1-Cas9D7   Cas9D7  Exp 
+    190819_Nahye_12K_D4_eCas9_Rep2-Cas9D7   Cas9D7  Exp 
+    190819_Nahye_12K_D4_evo_Rep1-Cas9D7 Cas9D7  Exp  
+    """
     with open(InstInitFolder.strProjectFile) as Sample_list:
 
         listSamples        = Helper.RemoveNullAndBadKeyword(Sample_list)
@@ -317,19 +325,41 @@ def Main():
         def RunPipeline(**kwargs):
 
             setGroup = set()
+            """
+            listSamples is ...
+            190819_Nahye_12K_D4_D0_1-Cas9D7 Cas9D7  Ctrl 
+            190819_Nahye_12K_D4_eCas9_Rep1-Cas9D7   Cas9D7  Exp ...
+            """
             for strSample in listSamples:
 
+                """
+                tupSampleInfo is ... tuple instance
+                (190819_Nahye_12K_D4_D0_1-Cas9D7, Cas9D7,  Ctrl)
+                """
                 tupSampleInfo = Helper.SplitSampleInfo(strSample)
                 if not tupSampleInfo: continue
+
+                """
+                strSample = 190819_Nahye_12K_D4_D0_1-Cas9D7 ... sample name
+                , strRef = Cas9D7 ... reference name
+                , strExpCtrl = Ctrl/Exp/"" 
+                """
                 strSample, strRef, strExpCtrl = tupSampleInfo
                 setGroup.add(strExpCtrl)
 
+                """
+                options ... has PAM type: Cas9 Cpf1, PAM position: Forward Reverse ...
+                """
                 InstRunner = clsIndelSearcherRunner(strSample, strRef, options, InstInitFolder)
                 #"""
                 logging.info('SplitFile')
                 InstRunner.SplitFile()
                 logging.info('MakeReference')
                 InstRunner.MakeReference()
+
+                """
+                Indel_searcher_crispresso_hash.py
+                """
                 logging.info('MakeIndelSearcherCmd')
                 listCmd = InstRunner.MakeIndelSearcherCmd()
                 logging.info('RunMulticore')

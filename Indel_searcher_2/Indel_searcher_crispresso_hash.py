@@ -131,7 +131,11 @@ class clsIndelSearchParser(object):
 
         dRef    = {}
         dResult = {}
-
+        """
+        self.strRefFa ... Reference.fa is made with 
+                            > Barcode.txt : Target_region.txt
+                            Reference_sequence.txt
+        """
         with open(self.strRefFa) as Ref:
 
             sBarcode       = ""
@@ -141,10 +145,19 @@ class clsIndelSearchParser(object):
             for i, sRow in enumerate(Ref):
 
                 if i % 2 == 0: ## >CGCTCTACGTAGACA:CTCTATTACTCGCCCCACCTCCCCCAGCCC
+                    """
+                    sBarcode ... CGCTCTACGTAGACA
+                    sTarget_region ... CTCTATTACTCGCCCCACCTCCCCCAGCCC
+                    """
                     sBarcode, sTarget_region, intBarcodeLen = self._SeperateFaHeader(sRow, sBarcode, sTarget_region,
                                                                                     intBarcodeLen, sBarcode_PAM_pos)
 
                 elif i % 2 != 0: ## AGCATCGATCAGCTACGATCGATCGATCACTAGCTACGATCGATCA
+                    """
+                    sRef_seq ... sRow without new line
+                    iIndel_start_pos ... start index of sTarget_region in sRef_seq
+                    iIndel_end_pos ... end index of sTarget_region in sRef_seq
+                    """
                     sRef_seq, iIndel_start_pos, iIndel_end_pos = self._SearchIndelPos(sRow, sBarcode_PAM_pos, sTarget_region)
 
                     try:
@@ -154,7 +167,21 @@ class clsIndelSearchParser(object):
                         continue
 
         assert len(dRef.keys()) == len(dResult.keys())
+        """
+        dRef[sBarcode] = (sRef_seq, sTarget_region, sRef_seq_after_barcode, iIndel_start_next_pos_from_barcode_end,
+                          iIndel_end_next_pos_from_barcode_end, iIndel_start_pos, iIndel_end_pos)  
+                          # total matched reads, insertion, deletion, complex
+        # lRef   : [(ref_seq, ref_seq_after_barcode, barcode, barcode end pos, indel end pos, indel from barcode),(...)]
+        TODO WHY iIndel_start_next_pos_from_barcode_end == iIndel_start_pos
+                & iIndel_end_next_pos_from_barcode_end == iIndel_end_pos ??????????????????
+        ## iIndel_start_next_pos_from_barcode_end = start index of target region
+        ## iIndel_end_next_pos_from_barcode_end = end of target region
+        ## iIndel_start_pos ... start index of sTarget_region in sRef_seq
+        ## iIndel_end_pos ... end index of sTarget_region in sRef_seq
 
+        dResult[sBarcode] = [0, 0, 0, 0, [], [], [], [], []]
+        # dResult = [# of total, # of ins, # of del, # of com, [total FASTQ], [ins FASTQ], [del FASTQ], [com FASTQ]]
+        """
         return dRef, dResult
         # end1: return
 
@@ -706,7 +733,25 @@ def Main():
             InstOutput.MakePickleOutput(dResultForward, dictResultIndelFreq)
 
     elif InstParameter.strPamType == 'CAS9':
+        """
+        InstParameter.strBarcodePamPos is ... PAM position: Forward Reverse
+        """
         logging.info('Search barcode INDEL pos')
+        """
+        dRef[sBarcode] = (sRef_seq, sTarget_region, sRef_seq_after_barcode, iIndel_start_next_pos_from_barcode_end,
+                          iIndel_end_next_pos_from_barcode_end, iIndel_start_pos, iIndel_end_pos)  
+                          # total matched reads, insertion, deletion, complex
+        # lRef   : [(ref_seq, ref_seq_after_barcode, barcode, barcode end pos, indel end pos, indel from barcode),(...)]
+        TODO WHY iIndel_start_next_pos_from_barcode_end == iIndel_start_pos
+                & iIndel_end_next_pos_from_barcode_end == iIndel_end_pos ??????????????????
+        ## iIndel_start_next_pos_from_barcode_end = start index of target region
+        ## iIndel_end_next_pos_from_barcode_end = end of target region
+        ## iIndel_start_pos ... start index of sTarget_region in sRef_seq
+        ## iIndel_end_pos ... end index of sTarget_region in sRef_seq
+
+        dResult[sBarcode] = [0, 0, 0, 0, [], [], [], [], []]
+        # dResult = [# of total, # of ins, # of del, # of com, [total FASTQ], [ins FASTQ], [del FASTQ], [com FASTQ]]
+        """
         dRef, dResult   = InstIndelSearch.SearchBarcodeIndelPosition(InstParameter.strBarcodePamPos)
         logging.info('Search INDEL')
         dResult_forward = InstIndelSearch.SearchIndel(listFastqForward, dRef, dResult, InstParameter.strBarcodePamPos)
