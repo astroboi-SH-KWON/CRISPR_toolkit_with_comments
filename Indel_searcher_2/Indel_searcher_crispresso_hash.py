@@ -25,7 +25,7 @@ class clsParameter(object):
             self.intDeletionWin   = int(sys.argv[8])
             self.strPamType       = sys.argv[9].upper()  ## Cpf1, Cas9
             self.strBarcodePamPos = sys.argv[10]  ## PAM - BARCODE type (reverse) or BARCODE - PAM type (forward)
-            self.intQualCutoff    = int(sys.argv[11])
+            self.intQualCutoff    = int(sys.argv[11])  ## default = 20
             self.strOutputdir     = sys.argv[12]
             self.strLogPath       = sys.argv[13]
             self.strEDNAFULL      = os.path.abspath('../EDNAFULL')
@@ -51,7 +51,14 @@ class clsFastqOpener(object):
 
         self.strForwardFqPath = InstParameter.strForwardFqPath
         self.strReverseFqPath = InstParameter.strReverseFqPath
-
+    """
+    :return [tuples array]
+        [(Sequence identifier,Nucleotide sequence, [Quality scores array]),(seq, qual)]
+        ex) tuple : (@MN00416:88:000H2WVH3:1:11101:17048:1168 1:N:0:1
+            , GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+            , [37,32,37,37,37,37,37,37 insted of FAFFFFFF...
+            )
+    """
     def OpenFastqForward(self):
 
         listFastqForward = []
@@ -67,6 +74,7 @@ class clsFastqOpener(object):
                 if i % 4 == 1 or i % 4 == 2:
                     listStore.append(strRow)
                 elif i % 4 == 0:
+                    """change Symbol to Quality-Score(https://bit.ly/2OLYC6m)"""
                     listQual = [ord(i) - 33 for i in strRow]
                     listStore.append(listQual)
                     listFastqForward.append(tuple(listStore))
@@ -93,6 +101,7 @@ class clsFastqOpener(object):
                 elif i % 4 == 2:
                     listStore.append(''.join([dictRev[strNucle] for strNucle in strRow[::-1]]))
                 elif i % 4 == 0:
+                    """change Symbol to Quality-Score(https://bit.ly/2OLYC6m)"""
                     listQual = [ord(i) - 33 for i in strRow][::-1]
                     listStore.append(listQual)
                     listFastqReverse.append(tuple(listStore))
@@ -172,10 +181,9 @@ class clsIndelSearchParser(object):
                           iIndel_end_next_pos_from_barcode_end, iIndel_start_pos, iIndel_end_pos)  
                           # total matched reads, insertion, deletion, complex
         # lRef   : [(ref_seq, ref_seq_after_barcode, barcode, barcode end pos, indel end pos, indel from barcode),(...)]
-        TODO WHY iIndel_start_next_pos_from_barcode_end == iIndel_start_pos
-                & iIndel_end_next_pos_from_barcode_end == iIndel_end_pos ??????????????????
-        ## iIndel_start_next_pos_from_barcode_end = start index of target region
-        ## iIndel_end_next_pos_from_barcode_end = end of target region
+        
+        ## iIndel_start_next_pos_from_barcode_end = start index of target region in sRef_seq WOUT BARCD SEQ 
+        ## iIndel_end_next_pos_from_barcode_end = end index of target region in sRef_seq WOUT BARCD SEQ
         ## iIndel_start_pos ... start index of sTarget_region in sRef_seq
         ## iIndel_end_pos ... end index of sTarget_region in sRef_seq
 
@@ -250,7 +258,24 @@ class clsIndelSearchParser(object):
                           iIndel_end_next_pos_from_barcode_end, iIndel_start_pos, iIndel_end_pos)  # total matched reads, insertion, deletion, complex
         dResult[sBarcode] = [0, 0, 0, 0, [], [], [], [], []]
 
+    """
+    lFASTQ = [(Sequence identifier,Nucleotide sequence, Quality scores array),(seq, qual)]
+        ex) (@MN00416:88:000H2WVH3:1:11101:17048:1168 1:N:0:1
+            , GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+            , [37,32,37,37,37,37,37,37 insted of FAFFFFFF...
+            )
+    dRef[sBarcode] = (sRef_seq, sTarget_region, sRef_seq_after_barcode, iIndel_start_next_pos_from_barcode_end,
+                      iIndel_end_next_pos_from_barcode_end, iIndel_start_pos, iIndel_end_pos)  
+                      # total matched reads, insertion, deletion, complex
 
+    ## iIndel_start_next_pos_from_barcode_end = start index of target region in sRef_seq WOUT BARCD SEQ 
+    ## iIndel_end_next_pos_from_barcode_end = end index of target region in sRef_seq WOUT BARCD SEQ
+    ## iIndel_start_pos ... start index of sTarget_region in sRef_seq
+    ## iIndel_end_pos ... end index of sTarget_region in sRef_seq
+
+    dResult[sBarcode] = [0, 0, 0, 0, [], [], [], [], []]
+    sBarcode_PAM_pos is ... PAM position: Forward Reverse
+    """
     def SearchIndel(self, lFASTQ=[], dRef = {}, dResult={}, sBarcode_PAM_pos=""):
 
         # lFASTQ : [(seq, qual),(seq, qual)]
@@ -263,16 +288,19 @@ class clsIndelSearchParser(object):
         InstGotoh = CoreGotoh(strEDNAFULL=self.strEDNAFULL, floOg=self.floOg, floOe=self.floOe)
 
         for lCol_FASTQ in lFASTQ:
-            sName = lCol_FASTQ[0]
+            sName = lCol_FASTQ[0]  # @MN00416:88:000H2WVH3:1:11101:17048:1168 1:N:0:1
             if sBarcode_PAM_pos == 'Reverse':
                 sSeq  = lCol_FASTQ[1][::-1]
                 lQual = lCol_FASTQ[2][::-1]
             else:
-                sSeq  = lCol_FASTQ[1]
-                lQual = lCol_FASTQ[2]
+                sSeq  = lCol_FASTQ[1]  # GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+                lQual = lCol_FASTQ[2]  # [37,32,37,37,37,37,37,37 insted of FAFFFFFF...
 
             assert isinstance(sName, str) and isinstance(sSeq, str) and isinstance(lQual, list)
-
+            """
+            if sSeq = 'GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGG...' and intBarcodeLen = 7
+            listSeqWindow = ['GAATCTA','AATCTAC','ATCTACT', ...., 'TCAGCGG']
+            """
             listSeqWindow = CoreHash.MakeHashTable(sSeq, intBarcodeLen)
 
             iBarcode_matched = 0
@@ -287,17 +315,30 @@ class clsIndelSearchParser(object):
                 if intFirstBarcode == 1: break ## A second barcode in a sequence is not considerable.
 
                 try:
+                    """
+                    lCol_ref = dRef[strSeqWindow] = (sRef_seq, sTarget_region, sRef_seq_after_barcode, iIndel_start_next_pos_from_barcode_end,
+                          iIndel_end_next_pos_from_barcode_end, iIndel_start_pos, iIndel_end_pos)  
+                    sBarcode = strSeqWindow
+                    intFirstBarcode = 1 , if dRef dict value (=lCol_ref) is existed by key == strSeqWindow
+                    """
                     lCol_ref, sBarcode, intFirstBarcode = CoreHash.IndexHashTable(dRef, strSeqWindow, intFirstBarcode)
                 except KeyError:
                     continue
 
                 sRef_seq                      = lCol_ref[0]
-                sTarget_region                = lCol_ref[1]
+                sTarget_region                = lCol_ref[1]  # ref_seq_after_barcode
                 iIndel_seq_len                = len(sTarget_region)
-                sRef_seq_after_barcode        = lCol_ref[2]
-                iIndel_start_from_barcode_pos = lCol_ref[3]
-                iIndel_end_from_barcode_pos   = lCol_ref[4]
+                sRef_seq_after_barcode        = lCol_ref[2]  # sRef_seq_after_barcode
+                iIndel_start_from_barcode_pos = lCol_ref[3]  # iIndel_start_next_pos_from_barcode_end  = start index
+                # of target_region in sRef_seq WOUT BARCD SEQ
+                iIndel_end_from_barcode_pos   = lCol_ref[4]  # iIndel_end_next_pos_from_barcode_end  = end of
+                # target_region in sRef_seq WOUT BARCD SEQ
                 try:
+                    """
+                    iIndel_end_from_barcode_pos = iIndel_end_next_pos_from_barcode_end  = end of target_region in sRef_seq WOUT BARCD SEQ
+                    iKbp_front_Indel_end = cleavege point(index) from end index of PAM
+                                        cleavege point(index) from end of target_region in sRef_seq WOUT BARCD SEQ
+                    """
                     if self.strPamType == 'CAS9':
                         iKbp_front_Indel_end = iIndel_end_from_barcode_pos - 6  ## cas9:-6, cpf1:-4
                     elif self.strPamType == 'CPF1':
@@ -316,14 +357,39 @@ class clsIndelSearchParser(object):
 
                 ## bug fix
                 if sBarcode == "": continue
-
+                """
+                :param 
+                    sSeq = GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+                    sBarcode = strSeqWindow
+                    iBarcode_matched = 0 (value for initial)
+                    lQual =  [37,32,37,37,37,37,37,37 insted of FAFFFFFF...
+                :return
+                    sSeq = GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+                    iBarcode_matched = 1
+                    sQuery_seq_after_barcode = seq after end index of barcode from FASTQ
+                    lQuery_qual_after_barcode = [spliced Quality Score from end index of barcode]
+                """
                 (sSeq, iBarcode_matched, sQuery_seq_after_barcode, lQuery_qual_after_barcode) = \
                     self._CheckBarcodePosAndRemove(sSeq, sBarcode, iBarcode_matched, lQual)
 
                 ## Alignment Seq to Ref
+                """
+                npGapIncentive = np.zeros(len(sRef_seq_after_barcode) + 1, dtype=np.int)
+                numpy zero matrix
+                """
                 npGapIncentive = InstGotoh.GapIncentive(sRef_seq_after_barcode)
 
                 try:
+                    """
+                    DIFF CHECK by RunCRISPResso2.CRISPResso2Align.global_align
+                    :param
+                        sQuery_seq_after_barcode = seq after end index of barcode from FASTQ
+                        sRef_seq_after_barcode = seq after end index of barcode from REFERENCE
+                    :return
+                    """
+                    # TODO it's guessing of lResult
+                    #  sQuery_needle_ori = lResult[0] = GCATACACCGTACTATCACAGTGTCTACACT...
+                    #  sRef_needle_ori   = lResult[1] = GCATACACCGTACTATCACAGTGTCTACACT...
                     lResult = InstGotoh.RunCRISPResso2(sQuery_seq_after_barcode.upper(),
                                                        sRef_seq_after_barcode.upper(),
                                                        npGapIncentive)
@@ -334,7 +400,17 @@ class clsIndelSearchParser(object):
                 sQuery_needle_ori = lResult[0]
                 sRef_needle_ori   = lResult[1]
 
+                """
+                # e.g.    ref   ------AAAGGCTACGATCTGCG------
+                #         query AAAAAAAAATCGCTCTCGCTCTCCGATCT
+                # trimmed ref         AAAGGCTACGATCTGCG         = sRef_needle
+                # trimmed qeury       AAATCGCTCTCGCTCTC         = sQuery_needle
+                """
                 sRef_needle, sQuery_needle            = self._TrimRedundantSideAlignment(sRef_needle_ori, sQuery_needle_ori)
+                """
+                lInsertion_in_read = [[insertion seq index, counts], [100, 1], [119, 13]]
+                lDeletion_in_read = [[deletion seq index, counts], [97, 1], [102, 3]]
+                """
                 lInsertion_in_read, lDeletion_in_read = self._MakeIndelPosInfo(sRef_needle, sQuery_needle)
 
                 # print 'sQuery_needle', sQuery_needle
@@ -344,7 +420,15 @@ class clsIndelSearchParser(object):
                 # print 'iIndel_end_from_barcode_pos', iIndel_end_from_barcode_pos
 
                 lTarget_indel_result = []  # ['20M2I', '23M3D' ...]
-
+                """
+                :param
+                    lInsertion_in_read = [[insertion seq index, counts], [100, 1], [119, 13]]
+                    iKbp_front_Indel_end = iIndel_end_from_barcode_pos - 6  ## cas9:-6, cpf1:-4
+                                            cleavege point(index) from end of target_region in sRef_seq WOUT BARCD SEQ
+                    lTarget_indel_result = []
+                    iIndel_end_from_barcode_pos = iIndel_end_next_pos_from_barcode_end  = end of target_region in sRef_seq WOUT BARCD SEQ
+                    iInsert_count = 0 
+                """
                 iInsert_count = self._TakeInsertionFromAlignment(lInsertion_in_read, iKbp_front_Indel_end, lTarget_indel_result,
                                                                  iIndel_end_from_barcode_pos, iInsert_count)
 
@@ -377,6 +461,10 @@ class clsIndelSearchParser(object):
                 #print(lTarget_indel_result)
                 #set_trace()
                 # len(sQuery_seq_after_barcode) == len(lQuery_qual_after_barcode)
+                """
+                Quality Score 
+                self.intQualCutoff = default = 20
+                """
                 if np.mean(lQuery_qual_after_barcode[iIndel_start_from_barcode_pos : iIndel_end_from_barcode_pos + 1]) >= self.intQualCutoff: ## Quality cutoff
 
                     """
@@ -390,6 +478,13 @@ class clsIndelSearchParser(object):
                     """
                     # filter start,
                     iTarget_start_from_barcode   = sRef_seq_after_barcode.index(sTarget_region)
+                    """
+                    :param 
+                        lTarget_indel_result = ['20M2I', '23M3D' ...]
+                        iTarget_start_from_barcode = sRef_seq_after_barcode.index(sTarget_region)
+                    :return 
+                        lTrimmed_target_indel_result =  ['20M2I', '23M3D' ...] after filtering out
+                    """
                     lTrimmed_target_indel_result = self._FixPos(lTarget_indel_result, iTarget_start_from_barcode)
 
                     # print 'Check'
@@ -420,7 +515,12 @@ class clsIndelSearchParser(object):
             #End:for
         #END:for
         return dResult
-
+    """
+    sSeq = GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+    sBarcode = strSeqWindow
+    iBarcode_matched = 0 (value for initial)
+    lQual =  [37,32,37,37,37,37,37,37 insted of FAFFFFFF...
+    """
     def _CheckBarcodePosAndRemove(self, sSeq, sBarcode, iBarcode_matched, lQual):
 
         # Check the barcode pos and remove it.
@@ -441,6 +541,13 @@ class clsIndelSearchParser(object):
         lQuery_qual_after_barcode = lQual[iBarcode_end_pos_FASTQ:]
 
         return (sSeq, iBarcode_matched, sQuery_seq_after_barcode, lQuery_qual_after_barcode)
+    """
+    :return
+        sSeq = GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+        iBarcode_matched = 1
+        sQuery_seq_after_barcode = seq after end index of barcode from FASTQ
+        lQuery_qual_after_barcode = [spliced Quality Score from end index of barcode]
+    """
 
     def _TrimRedundantSideAlignment(self, sRef_needle_ori, sQuery_needle_ori):
 
@@ -449,6 +556,7 @@ class clsIndelSearchParser(object):
         #         query AAAAAAAAATCGCTCTCGCTCTCCGATCT
         # trimmed ref         AAAGGCTACGATCTGCG
         # trimmed qeury       AAATCGCTCTCGCTCTC
+        # TODO really trimmed like those???????? especially sQuery_needle = trimmed qeury
         iReal_ref_needle_start = 0
         iReal_ref_needle_end = len(sRef_needle_ori)
         iRef_needle_len = len(sRef_needle_ori)
@@ -466,12 +574,21 @@ class clsIndelSearchParser(object):
                 break
 
         sRef_needle = sRef_needle_ori[iReal_ref_needle_start:iReal_ref_needle_end + 1]
+        # TODO if iReal_ref_needle_start == 0:????????????????????
         if iReal_ref_needle_start:
             sQuery_needle = sQuery_needle_ori[:iReal_ref_needle_end]
         sQuery_needle = sQuery_needle_ori[:len(sRef_needle)]
         # detaching completion
         return (sRef_needle, sQuery_needle)
 
+    """
+    # e.g.    ref   ------AAAGGCTACGATCTGCG------
+    #         query AAAAAAAAATCGCTCTCGCTCTCCGATCT
+    # trimmed ref         AAAGGCTACGATCTGCG         = sRef_needle
+    # trimmed qeury       AAATCGCTCTCGCTCTC         = sQuery_needle
+    '-' in ref is insertion
+    '-' in FASTQ is deletion
+    """
     def _MakeIndelPosInfo(self, sRef_needle, sQuery_needle):
 
         # indel info making.
@@ -480,12 +597,20 @@ class clsIndelSearchParser(object):
         iNeedle_insertion       = 0
         iNeedle_deletion        = 0
 
-        lInsertion_in_read = []  # insertion result [[100, 1], [119, 13]]
-        lDeletion_in_read  = []  # deletion result  [[97, 1], [102, 3]]
+        lInsertion_in_read = []  # insertion result [[insertion seq index, counts], [100, 1], [119, 13]]
+        lDeletion_in_read  = []  # [[deletion seq index, counts], [97, 1], [102, 3]]
 
         # print 'sRef_needle', sRef_needle
         # print 'sQuery_needle', sQuery_needle
+        # TODO guessing (sRef_nucle, sQuery_nucle) = [('A','C'),('-','T'),('-','G'),('G','-') ...]
         for i, (sRef_nucle, sQuery_nucle) in enumerate(zip(sRef_needle, sQuery_needle)):
+            """
+            zip(seq1 [, seq2 [...]]) -> [(seq1[0], seq2[0] ...), (...)]
+
+            Return a list of tuples, where each tuple contains the i-th element
+            from each of the argument sequences.  The returned list is truncated
+            in length to the length of the shortest argument sequence.
+            """
 
             if sRef_nucle == '-':
                 iNeedle_insertion += 1
@@ -509,14 +634,26 @@ class clsIndelSearchParser(object):
 
         return (lInsertion_in_read, lDeletion_in_read)
 
-
+    """
+    :param
+        lInsertion_in_read = [[insertion seq index, counts], [100, 1], [119, 13]]
+        iKbp_front_Indel_end = iIndel_end_from_barcode_pos - 6  ## cas9:-6, cpf1:-4
+                                cleavege point(index) from end of target_region in sRef_seq WOUT BARCD SEQ
+        lTarget_indel_result = []
+        iIndel_end_from_barcode_pos = iIndel_end_next_pos_from_barcode_end  = end of target_region in sRef_seq WOUT BARCD SEQ
+        iInsert_count = 0 
+    """
     def _TakeInsertionFromAlignment(self, lInsertion_in_read, iKbp_front_Indel_end, lTarget_indel_result,
                                     iIndel_end_from_barcode_pos, iInsert_count):
         """
         ins case
         ...............................NNNNNNNNNNNNNN....NNNNNNNNNNNNNNNNNNN*NNNNNAGCTT
         """
-        for iMatch_pos, iInsertion_pos in lInsertion_in_read:
+        for iMatch_pos, iInsertion_pos in lInsertion_in_read:  # lInsertion_in_read = [[insertion seq index, counts], [100, 1], [119, 13]]
+            """
+            iMatch_pos = insertion seq index
+            iInsertion_pos = counts
+            """
             if self.strPamType == 'CAS9':
                 # if i5bp_front_Indel_end == iMatch_pos -1 or iIndel_end_from_barcode_pos == iMatch_pos -1: # iMatch_pos is one base # original ver
                 if iKbp_front_Indel_end - self.intInsertionWin <= iMatch_pos - 1 <= iKbp_front_Indel_end + self.intInsertionWin:  # iMatch_pos is one base
@@ -571,11 +708,20 @@ class clsIndelSearchParser(object):
         dResult[sBarcode][self.intTotalFastq].append(listResultFASTQ)
         return listResultFASTQ
 
+    """
+    :param 
+        lTarget_indel_result = ['20M2I', '23M3D' ...]
+        iTarget_start_from_barcode = sRef_seq_after_barcode.index(sTarget_region)
+    """
     def _FixPos(self, lTarget_indel_result, iTarget_start_from_barcode):
 
         lTrimmed_target_indel_result = []
 
         for sINDEL in lTarget_indel_result:
+            """
+            sINDEL = '20M2I'
+            iMatch_target_start = start index of INDEL in Target_region 
+            """
             # B - A is not included B position, so +1
             iMatch_target_start = int(sINDEL.split('M')[0]) - iTarget_start_from_barcode
             """ This part determines a deletion range.
@@ -596,7 +742,7 @@ class clsIndelSearchParser(object):
             Like this pattern doesn't seleted. because, deletion checking is begun the target region start position. 
             Thus, I have fixed this problem.
             """
-
+            # TODO -(iTarget_start_from_barcode) needs - ?????
             if iMatch_target_start <= -(iTarget_start_from_barcode):
                 # print(iMatch_target_start, iTarget_start_from_barcode)
                 continue
@@ -623,6 +769,10 @@ class clsIndelSearchParser(object):
 
         return (sRef_seq_after_barcode, sQuery_seq_after_barcode)
 
+    """
+    dResult = { sBarcode : [# of total, # of ins, # of del, # of com, [total FASTQ], [ins FASTQ], [del FASTQ], [com FASTQ]]
+                , sBarcode : [0, 0, 0, 0, [], [], [], [], []] ...}
+    """
     def CalculateIndelFrequency(self, dResult):
         dResult_INDEL_freq = {}
 
@@ -700,6 +850,13 @@ def Main():
 
     logging.info('File Open')
     InstFileOpen     = clsFastqOpener(InstParameter)
+    """
+    listFastqForward = [(Sequence identifier,Nucleotide sequence, Quality scores array),(seq, qual)]
+        ex) (@MN00416:88:000H2WVH3:1:11101:17048:1168 1:N:0:1
+            , GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+            , [37,32,37,37,37,37,37,37 insted of FAFFFFFF...
+            )
+    """
     listFastqForward = InstFileOpen.OpenFastqForward()
     if InstParameter.strPair == 'True':
         listFastqReverse = InstFileOpen.OpenFastqReverse()
@@ -742,10 +899,9 @@ def Main():
                           iIndel_end_next_pos_from_barcode_end, iIndel_start_pos, iIndel_end_pos)  
                           # total matched reads, insertion, deletion, complex
         # lRef   : [(ref_seq, ref_seq_after_barcode, barcode, barcode end pos, indel end pos, indel from barcode),(...)]
-        TODO WHY iIndel_start_next_pos_from_barcode_end == iIndel_start_pos
-                & iIndel_end_next_pos_from_barcode_end == iIndel_end_pos ??????????????????
-        ## iIndel_start_next_pos_from_barcode_end = start index of target region
-        ## iIndel_end_next_pos_from_barcode_end = end of target region
+
+        ## iIndel_start_next_pos_from_barcode_end = start index of target region in sRef_seq WOUT BARCD SEQ 
+        ## iIndel_end_next_pos_from_barcode_end = end index of target region in sRef_seq WOUT BARCD SEQ
         ## iIndel_start_pos ... start index of sTarget_region in sRef_seq
         ## iIndel_end_pos ... end index of sTarget_region in sRef_seq
 
@@ -754,7 +910,21 @@ def Main():
         """
         dRef, dResult   = InstIndelSearch.SearchBarcodeIndelPosition(InstParameter.strBarcodePamPos)
         logging.info('Search INDEL')
+
+        """
+        :param
+            listFastqForward = [(Sequence identifier,Nucleotide sequence, Quality scores array),(seq, qual)]
+                ex) (@MN00416:88:000H2WVH3:1:11101:17048:1168 1:N:0:1
+                    , GAATCTACTTAAACAAGGCAAAATGCCGTGTTTATCTCGTCAACTTGTTGGCGAGATTTTTTGCATACACCGTACTATCACAGTGTCTACACTCTGCCTGAACAGAACTTGGGAATCACTGAGCGCAGCTTGGCGTAACTAGATCTCTACTCTACCACTTGTACTTCAGCGG
+                    , [37,32,37,37,37,37,37,37 insted of FAFFFFFF...
+                    )
+            InstParameter.strBarcodePamPos is ... PAM position: Forward Reverse
+        :return
+            dResult_forward = { sBarcode : [# of total, # of ins, # of del, # of com, [total FASTQ], [ins FASTQ], [del FASTQ], [com FASTQ]]
+                        , sBarcode : [0, 0, 0, 0, [], [], [], [], []] ...}
+        """
         dResult_forward = InstIndelSearch.SearchIndel(listFastqForward, dRef, dResult, InstParameter.strBarcodePamPos)
+
         logging.info('Calculate INDEL frequency')
         dResult_INDEL_freq = InstIndelSearch.CalculateIndelFrequency(dResult_forward)
 
