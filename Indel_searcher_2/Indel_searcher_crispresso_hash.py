@@ -448,7 +448,11 @@ class clsIndelSearchParser(object):
                 # print 'iIndel_start_from_barcode_pos', iIndel_start_from_barcode_pos
                 # print 'iIndel_end_from_barcode_pos', iIndel_end_from_barcode_pos
                 # """
-
+                """
+                listResultFASTQ = [sName, sSeq, '+', ''.join(chr(i + 33) for i in lQual)]
+                        ex) [Sequence identifier,  Nucleotide sequence from FASTQ, '+' , Quality scores ]
+                dResult[sBarcode][self.intTotalFastq].append(listResultFASTQ)
+                """
                 listResultFASTQ = self._MakeAndStoreQuality(sName, sSeq, lQual, dResult, sBarcode)
 
                 """
@@ -742,7 +746,7 @@ class clsIndelSearchParser(object):
             Like this pattern doesn't seleted. because, deletion checking is begun the target region start position. 
             Thus, I have fixed this problem.
             """
-            # TODO -(iTarget_start_from_barcode) needs - ?????
+            # TODO -(iTarget_start_from_barcode) is needed - ?????
             if iMatch_target_start <= -(iTarget_start_from_barcode):
                 # print(iMatch_target_start, iTarget_start_from_barcode)
                 continue
@@ -770,18 +774,42 @@ class clsIndelSearchParser(object):
         return (sRef_seq_after_barcode, sQuery_seq_after_barcode)
 
     """
-    dResult = { sBarcode : [# of total, # of ins, # of del, # of com, [total FASTQ], [ins FASTQ], [del FASTQ], [com FASTQ]]
-                , sBarcode : [0, 0, 0, 0, [], [], [], [], []] ...}
+    dResult = { sBarcode : { self.intIndelInfo  = 8 : [[sRef_seq_after_barcode, sQuery_seq_after_barcode, lTarget_indel_result, sTarget_region], ..]) 
+                        , self.intTotalFastq : [Sequence identifier,  Nucleotide sequence from FASTQ, '+' , Quality scores ] 
+                        , self.intNumOfTotal : iBarcode_matched 
+                        , self.intNumOfIns : iInsert_count 
+                        , self.intNumOfDel : iDelete_count 
+                        , self.intNumofCom : iComplex_count
+                         }
+     , ...}
     """
     def CalculateIndelFrequency(self, dResult):
         dResult_INDEL_freq = {}
-
+        """
+         lValue = { self.intIndelInfo  = 8 : [[sRef_seq_after_barcode, sQuery_seq_after_barcode, lTarget_indel_result, sTarget_region], ..]) 
+                    , self.intTotalFastq = 4 : [Sequence identifier,  Nucleotide sequence from FASTQ, '+' , Quality scores ] 
+                    , self.intNumOfTotal = 0 : iBarcode_matched 
+                    , self.intNumOfIns = 1 : iInsert_count 
+                    , self.intNumOfDel = 2 : iDelete_count 
+                    , self.intNumofCom = 3 : iComplex_count
+                     }
+        """
         for sBarcode, lValue in dResult.items():  # lValue[gINDEL_info] : [[sRef_seq_after_barcode, sQuery_seq_after_barcode, lTarget_indel_result, sTarget_region], ..])
             sRef_seq_loop = ''
             llINDEL_store = []  # ['ACAGACAGA', ['20M2I', '23M3D']]
             dINDEL_freq   = {}
 
             if lValue[self.intIndelInfo]:
+                """
+                lValue[self.intIndelInfo] = [
+                            sRef_seq_loop = sRef_seq_after_barcode
+                            , sQuery_seq = sQuery_seq_after_barcode
+                            , lINDEL = lTarget_indel_result ... [['20M2I', '23M3D'], ...] 
+                            , sTarget_region = 
+                            , sRef_needle = 
+                            , sQuery_needle = 
+                            ]
+                """
                 for sRef_seq_loop, sQuery_seq, lINDEL, sTarget_region, sRef_needle, sQuery_needle in lValue[self.intIndelInfo]: # llINDEL : [['20M2I', '23M3D'], ...]
                     # print 'lINDEL', lINDEL
                     for sINDEL in lINDEL:
@@ -920,15 +948,34 @@ def Main():
                     )
             InstParameter.strBarcodePamPos is ... PAM position: Forward Reverse
         :return
-            dResult_forward = { sBarcode : [# of total, # of ins, # of del, # of com, [total FASTQ], [ins FASTQ], [del FASTQ], [com FASTQ]]
-                        , sBarcode : [0, 0, 0, 0, [], [], [], [], []] ...}
+            dResult_forward = { sBarcode : { self.intIndelInfo  = 8 : [[sRef_seq_after_barcode, sQuery_seq_after_barcode, lTarget_indel_result, sTarget_region], ..]) 
+                                    , self.intTotalFastq = 4 : [Sequence identifier,  Nucleotide sequence from FASTQ, '+' , Quality scores ] 
+                                    , self.intNumOfTotal = 0 : iBarcode_matched 
+                                    , self.intNumOfIns = 1 : iInsert_count 
+                                    , self.intNumOfDel = 2 : iDelete_count 
+                                    , self.intNumofCom = 3 : iComplex_count
+                                     }
+             , ...}
         """
         dResult_forward = InstIndelSearch.SearchIndel(listFastqForward, dRef, dResult, InstParameter.strBarcodePamPos)
 
         logging.info('Calculate INDEL frequency')
+        """
+        dResult_INDEL_freq = { sBarcode : [sRef_seq_loop = sRef_seq_after_barcode
+                                            , lQuery = sQuery_seq_after_barcode
+                                            , sINDEL = lTarget_indel_result ... [['20M2I', '23M3D'], ...]
+                                            , float(iFreq) / iTotal
+                                            , sTarget_region
+                                            , lRef_needle
+                                            , lQuery_needle]
+                                }
+        """
         dResult_INDEL_freq = InstIndelSearch.CalculateIndelFrequency(dResult_forward)
 
         logging.info('Make pickle output forward')
+        """
+        store data as each instance like python object by pickle ... so open file as byte 'wb','rb'
+        """
         InstOutput.MakePickleOutput(dResult_forward, dResult_INDEL_freq, InstParameter.strBarcodePamPos)
 
     logging.info('Program end : %s' % InstParameter.strForwardFqPath)
